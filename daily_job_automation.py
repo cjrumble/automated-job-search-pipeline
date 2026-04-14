@@ -22,6 +22,23 @@ sheet = client.open_by_url(SPREADSHEET_URL)
 
 today_tab = datetime.today().strftime("%Y-%m-%d")
 worksheet = sheet.add_worksheet(title=today_tab, rows="100", cols="10")
+#worksheet.format("H2:H100", {
+#    "dataValidation": {
+#        "condition": {
+#            "type": "ONE_OF_LIST",
+#            "values": [
+#                {"userEnteredValue": "Not Applied"},
+#                {"userEnteredValue": "Applied"},
+#                {"userEnteredValue": "Recruiter Call"},
+#                {"userEnteredValue": "Interview Scheduled"},
+#                {"userEnteredValue": "Rejected"}
+#            ]
+#        }
+#    }
+#})
+
+
+
 
 # ---------------- SCRAPER ----------------
 options = webdriver.ChromeOptions()
