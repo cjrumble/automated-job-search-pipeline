@@ -1,51 +1,19 @@
 import time
 import pandas as pd
-from datetime import datetime
-from selenium import webdriver
-from bs4 import BeautifulSoup
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
+import datetime
+import os
+import selenium
+import bs4
 
-# ---------------- CONFIG ----------------
-SEARCH_URL = "https://www.linkedin.com/jobs/search/?keywords=SDET%20QA%20Automation&location=United%20States"
-MAX_JOBS = 25
-
-# ---------------- GOOGLE SHEETS ----------------
-scope = ["https://spreadsheets.google.com/feeds",
-         "https://www.googleapis.com/auth/drive"]
-
-creds = ServiceAccountCredentials.from_json_keyfile_name("credentials.json", scope)
-client = gspread.authorize(creds)
-
-SPREADSHEET_URL = "https://docs.google.com/spreadsheets/d/1q1qRIyIQFFNFSYsngkgHPzWUL6vCcXqD"
-sheet = client.open_by_url(SPREADSHEET_URL)
-
-today_tab = datetime.today().strftime("%Y-%m-%d")
-worksheet = sheet.add_worksheet(title=today_tab, rows="100", cols="10")
-#worksheet.format("H2:H100", {
-#    "dataValidation": {
-#        "condition": {
-#            "type": "ONE_OF_LIST",
-#            "values": [
-#                {"userEnteredValue": "Not Applied"},
-#                {"userEnteredValue": "Applied"},
-#                {"userEnteredValue": "Recruiter Call"},
-#                {"userEnteredValue": "Interview Scheduled"},
-#                {"userEnteredValue": "Rejected"}
-#            ]
-#        }
-#    }
-#})
-
-
-
-
+# CSV file path
+CSV_FILE = "job_applications.csv"
+MAX_JOBS = 20
 # ---------------- SCRAPER ----------------
-options = webdriver.ChromeOptions()
+options = selenium.webdriver.ChromeOptions()
 options.add_argument("--headless")
 
-driver = webdriver.Chrome(options=options)
-driver.get(SEARCH_URL)
+driver = selenium.webdriver.Chrome(options=options)
+#driver.get(SEARCH_URL)
 time.sleep(5)
 
 # Scroll to load jobs
@@ -53,7 +21,7 @@ for _ in range(6):
     driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
     time.sleep(2)
 
-soup = BeautifulSoup(driver.page_source, "html.parser")
+soup = bs4.BeautifulSoup(driver.page_source, "html.parser")
 jobs = soup.find_all("div", class_="base-card")
 
 results = []
@@ -89,11 +57,11 @@ for job in jobs[:MAX_JOBS]:
             "Company": company,
             "Job Title": title,
             "Link": link,
-            "Date Posted": datetime.today().strftime("%Y-%m-%d"),
+            "Date Posted": datetime.datetime.today().strftime("%Y-%m-%d"),
             "Salary": "N/A",
             "Fit Score": fit_score,
             "Priority": 0,
-            "Status": "Not Applied"
+            "Application Status": "Not Applied"
         })
 
     except:
@@ -104,22 +72,19 @@ driver.quit()
 # ---------------- PRIORITY RANKING ----------------
 df = pd.DataFrame(results)
 
+if not df.empty:
+    df = df.sort_values(by="Fit Score", ascending=False)
+    df["Priority"] = range(1, len(df) + 1)
+
+# Check if CSV exists and load existing data, or create new DataFrame
+if os.path.exists(CSV_FILE):
+    existing_df = pd.read_csv(CSV_FILE)
+    df = pd.concat([existing_df, df], ignore_index=True)
+
+# Sort and assign priority after merging all data
 df = df.sort_values(by="Fit Score", ascending=False)
 df["Priority"] = range(1, len(df) + 1)
 
-# ---------------- PUSH TO SHEET ----------------
-headers = ["Company","Job Title","Link","Date Posted","Salary","Fit Score","Priority","Application Status"]
-worksheet.append_row(headers)
-
-for _, row in df.iterrows():
-    worksheet.append_row([
-        row["Company"],
-        row["Job Title"],
-        row["Link"],
-        row["Date Posted"],
-        row["Salary"],
-        row["Fit Score"],
-        row["Priority"],
-        row["Status"]
-    ])
-print(f"✅ Added {len(df)} jobs to {today_tab}")
+# Save to CSV
+df.to_csv(CSV_FILE, index=False)
+print(f"✅ Added {len(df)} jobs to {CSV_FILE}")
