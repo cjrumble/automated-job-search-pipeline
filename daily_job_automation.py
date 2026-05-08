@@ -2,17 +2,17 @@ import time
 import pandas as pd
 import datetime
 import os
-import selenium
 import bs4
+from selenium import webdriver
 
 # CSV file path
 CSV_FILE = "job_applications.csv"
 MAX_JOBS = 20
 # ---------------- SCRAPER ----------------
-options = selenium.webdriver.ChromeOptions()
+options = webdriver.ChromeOptions()
 options.add_argument("--headless")
 
-driver = selenium.webdriver.Chrome(options=options)
+driver = webdriver.Chrome(options=options)
 #driver.get(SEARCH_URL)
 time.sleep(5)
 
@@ -72,18 +72,22 @@ driver.quit()
 # ---------------- PRIORITY RANKING ----------------
 df = pd.DataFrame(results)
 
-if not df.empty:
+if not df.empty and "Fit Score" in df.columns:
     df = df.sort_values(by="Fit Score", ascending=False)
     df["Priority"] = range(1, len(df) + 1)
 
 # Check if CSV exists and load existing data, or create new DataFrame
 if os.path.exists(CSV_FILE):
-    existing_df = pd.read_csv(CSV_FILE)
-    df = pd.concat([existing_df, df], ignore_index=True)
+    try:
+        existing_df = pd.read_csv(CSV_FILE)
+        df = pd.concat([existing_df, df], ignore_index=True)
+    except pd.errors.EmptyDataError:
+        pass
 
 # Sort and assign priority after merging all data
-df = df.sort_values(by="Fit Score", ascending=False)
-df["Priority"] = range(1, len(df) + 1)
+if "Fit Score" in df.columns:
+    df = df.sort_values(by="Fit Score", ascending=False)
+    df["Priority"] = range(1, len(df) + 1)
 
 # Save to CSV
 df.to_csv(CSV_FILE, index=False)
