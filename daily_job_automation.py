@@ -4,16 +4,18 @@ import datetime
 import os
 import bs4
 from selenium import webdriver
+from scrape_greenhouse import scrape_greenhouse
 
 # CSV file path
 CSV_FILE = "job_applications.csv"
 MAX_JOBS = 20
+SEARCH_URL = "https://www.indeed.com/jobs?q=QA+Automation&l=Remote"
 # ---------------- SCRAPER ----------------
 options = webdriver.ChromeOptions()
 options.add_argument("--headless")
 
 driver = webdriver.Chrome(options=options)
-#driver.get(SEARCH_URL)
+driver.get(SEARCH_URL)
 time.sleep(5)
 
 # Scroll to load jobs
@@ -25,6 +27,7 @@ soup = bs4.BeautifulSoup(driver.page_source, "html.parser")
 jobs = soup.find_all("div", class_="base-card")
 
 results = []
+is_blocked = soup.title and soup.title.text and "blocked" in soup.title.text.lower()
 
 # ---------------- SCORING ----------------
 def calculate_fit_score(title, location):
@@ -42,6 +45,25 @@ def calculate_fit_score(title, location):
         score += 1
 
     return min(score, 10)
+
+
+if is_blocked:
+    try:
+        fallback_jobs = scrape_greenhouse("stripe")[:MAX_JOBS]
+        for job in fallback_jobs:
+            fit_score = calculate_fit_score(job.get("title", ""), job.get("location", ""))
+            results.append({
+                "Company": job.get("company", "Unknown"),
+                "Job Title": job.get("title", ""),
+                "Link": job.get("link", ""),
+                "Date Posted": datetime.datetime.today().strftime("%Y-%m-%d"),
+                "Salary": "N/A",
+                "Fit Score": fit_score,
+                "Priority": 0,
+                "Application Status": "Not Applied"
+            })
+    except Exception:
+        pass
 
 # ---------------- PARSE JOBS ----------------
 for job in jobs[:MAX_JOBS]:
@@ -64,7 +86,7 @@ for job in jobs[:MAX_JOBS]:
             "Application Status": "Not Applied"
         })
 
-    except:
+    except Exception:
         continue
 
 driver.quit()
