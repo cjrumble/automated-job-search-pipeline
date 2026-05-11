@@ -29,9 +29,11 @@ jobs:
                       gspread google-auth google-auth-oauthlib openai
 
       - name: Write credentials.json from secret
-        # The secret must be the raw JSON content of your service account key.
-        # See the hosting setup guide for how to create this secret.
-        run: echo '${{ secrets.GOOGLE_CREDENTIALS_JSON }}' > credentials.json
+        # Stores the raw JSON content of your service account key.
+        # printf is used instead of echo to safely handle multi-line values.
+        env:
+          GOOGLE_CREDS: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
+        run: printf '%s' "$GOOGLE_CREDS" > credentials.json
 
       - name: Run pipeline
         env:

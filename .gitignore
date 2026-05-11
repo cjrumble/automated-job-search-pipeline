@@ -16,3 +16,4 @@ env/
 
 # Local data outputs
 job_applications.csv
+.claude/

@@ -1,118 +1,125 @@
+"""
+daily_job_automation.py — legacy standalone script (superseded by run_pipeline.py)
+
+This was the original entry point. It uses Selenium to scrape Indeed directly,
+which is now blocked (Indeed returns 403). The production pipeline uses
+run_pipeline.py instead, which sources jobs from Greenhouse, Lever, and RemoteOK.
+
+Kept here for reference only. Run with: python daily_job_automation.py
+Requires: Chrome + chromedriver installed and in PATH.
+"""
+
 import time
 import pandas as pd
 import datetime
 import os
 import bs4
-from selenium import webdriver
 from scrape_greenhouse import scrape_greenhouse
 
-# CSV file path
 CSV_FILE = "job_applications.csv"
 MAX_JOBS = 20
 SEARCH_URL = "https://www.indeed.com/jobs?q=QA+Automation&l=Remote"
-# ---------------- SCRAPER ----------------
-options = webdriver.ChromeOptions()
-options.add_argument("--headless")
 
-driver = webdriver.Chrome(options=options)
-driver.get(SEARCH_URL)
-time.sleep(5)
 
-# Scroll to load jobs
-for _ in range(6):
-    driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-    time.sleep(2)
-
-soup = bs4.BeautifulSoup(driver.page_source, "html.parser")
-# FIX 9b: was class_="base-card" — that is LinkedIn's CSS class, NOT Indeed's.
-# Indeed uses .job_seen_beacon for job cards.
-jobs = soup.find_all("div", class_="job_seen_beacon")
-
-results = []
-is_blocked = soup.title and soup.title.text and "blocked" in soup.title.text.lower()
-
-# ---------------- SCORING ----------------
 def calculate_fit_score(title, location):
     score = 5
     title_lower = title.lower()
-
     keywords = ["sdet", "automation", "cypress", "selenium", "api"]
-
     score += sum(1 for k in keywords if k in title_lower)
-
     if "senior" in title_lower:
         score += 1
-
     if "remote" in location.lower():
         score += 1
-
     return min(score, 10)
 
 
-if is_blocked:
+def main():
     try:
-        fallback_jobs = scrape_greenhouse("stripe")[:MAX_JOBS]
-        for job in fallback_jobs:
-            fit_score = calculate_fit_score(job.get("title", ""), job.get("location", ""))
-            results.append({
-                "Company": job.get("company", "Unknown"),
-                "Job Title": job.get("title", ""),
-                "Link": job.get("link", ""),
-                "Date Posted": datetime.datetime.today().strftime("%Y-%m-%d"),
-                "Salary": "N/A",
-                "Fit Score": fit_score,
-                "Priority": 0,
-                "Application Status": "Not Applied"
-            })
-    except Exception:
-        pass
+        from selenium import webdriver
+    except ImportError:
+        print("selenium is not installed. Run: pip install selenium")
+        return
 
-# ---------------- PARSE JOBS ----------------
-for job in jobs[:MAX_JOBS]:
+    options = webdriver.ChromeOptions()
+    options.add_argument("--headless")
+
     try:
-        title = job.find("h3").text.strip()
-        company = job.find("h4").text.strip()
-        location = job.find("span").text.strip()
-        link = job.find("a")["href"]  # REAL JOB LINK
+        driver = webdriver.Chrome(options=options)
+    except Exception as e:
+        print(f"Chrome/chromedriver not available: {e}")
+        print("Use run_pipeline.py instead — it doesn't require Chrome.")
+        return
 
-        fit_score = calculate_fit_score(title, location)
+    driver.get(SEARCH_URL)
+    time.sleep(5)
 
-        results.append({
-            "Company": company,
-            "Job Title": title,
-            "Link": link,
-            "Date Posted": datetime.datetime.today().strftime("%Y-%m-%d"),
-            "Salary": "N/A",
-            "Fit Score": fit_score,
-            "Priority": 0,
-            "Application Status": "Not Applied"
-        })
+    for _ in range(6):
+        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+        time.sleep(2)
 
-    except Exception:
-        continue
+    soup = bs4.BeautifulSoup(driver.page_source, "html.parser")
+    job_cards = soup.find_all("div", class_="job_seen_beacon")
+    is_blocked = soup.title and soup.title.text and "blocked" in soup.title.text.lower()
 
-driver.quit()
+    results = []
 
-# ---------------- PRIORITY RANKING ----------------
-df = pd.DataFrame(results)
+    if is_blocked:
+        try:
+            for job in scrape_greenhouse("stripe")[:MAX_JOBS]:
+                fit_score = calculate_fit_score(job.get("title", ""), job.get("location", ""))
+                results.append({
+                    "Company": job.get("company", "Unknown"),
+                    "Job Title": job.get("title", ""),
+                    "Link": job.get("link", ""),
+                    "Date Posted": datetime.datetime.today().strftime("%Y-%m-%d"),
+                    "Salary": "N/A",
+                    "Fit Score": fit_score,
+                    "Priority": 0,
+                    "Application Status": "Not Applied",
+                })
+        except Exception:
+            pass
+    else:
+        for job in job_cards[:MAX_JOBS]:
+            try:
+                title = job.find("h3").text.strip()
+                company = job.find("h4").text.strip()
+                location = job.find("span").text.strip()
+                link = job.find("a")["href"]
+                results.append({
+                    "Company": company,
+                    "Job Title": title,
+                    "Link": link,
+                    "Date Posted": datetime.datetime.today().strftime("%Y-%m-%d"),
+                    "Salary": "N/A",
+                    "Fit Score": calculate_fit_score(title, location),
+                    "Priority": 0,
+                    "Application Status": "Not Applied",
+                })
+            except Exception:
+                continue
 
-if not df.empty and "Fit Score" in df.columns:
-    df = df.sort_values(by="Fit Score", ascending=False)
-    df["Priority"] = range(1, len(df) + 1)
+    driver.quit()
 
-# Check if CSV exists and load existing data, or create new DataFrame
-if os.path.exists(CSV_FILE):
-    try:
-        existing_df = pd.read_csv(CSV_FILE)
-        df = pd.concat([existing_df, df], ignore_index=True)
-    except pd.errors.EmptyDataError:
-        pass
+    df = pd.DataFrame(results)
+    if not df.empty and "Fit Score" in df.columns:
+        df = df.sort_values(by="Fit Score", ascending=False)
+        df["Priority"] = range(1, len(df) + 1)
 
-# Sort and assign priority after merging all data
-if "Fit Score" in df.columns:
-    df = df.sort_values(by="Fit Score", ascending=False)
-    df["Priority"] = range(1, len(df) + 1)
+    if os.path.exists(CSV_FILE):
+        try:
+            existing_df = pd.read_csv(CSV_FILE)
+            df = pd.concat([existing_df, df], ignore_index=True)
+        except pd.errors.EmptyDataError:
+            pass
 
-# Save to CSV
-df.to_csv(CSV_FILE, index=False)
-print(f"✅ Added {len(df)} jobs to {CSV_FILE}")
+    if "Fit Score" in df.columns:
+        df = df.sort_values(by="Fit Score", ascending=False)
+        df["Priority"] = range(1, len(df) + 1)
+
+    df.to_csv(CSV_FILE, index=False)
+    print(f"Added {len(df)} jobs to {CSV_FILE}")
+
+
+if __name__ == "__main__":
+    main()
