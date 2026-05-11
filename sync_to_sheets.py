@@ -25,7 +25,8 @@ except ImportError:
     )
 
 SCOPES = [
-    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/spreadsheets",   # read/write the sheet
+    "https://www.googleapis.com/auth/drive.readonly",  # find spreadsheet by name
 ]
 
 COLUMNS = [

@@ -3,6 +3,9 @@
 credentials.json
 *.json.key
 
+# Dead code / unused stubs
+scope.py
+
 # Python
 __pycache__/
 *.py[cod]
