@@ -1,11 +1,28 @@
 name: Daily Job Search Pipeline
 
 # Runs every day at 9:00 AM UTC (5:00 AM EST / 2:00 AM PST)
-# Also manually triggerable from the GitHub Actions tab at any time.
+# Also triggered by the Netlify web form via workflow_dispatch with custom inputs.
 on:
   schedule:
     - cron: "0 9 * * *"
   workflow_dispatch:
+    inputs:
+      target_role:
+        description: "Job title to search for"
+        required: false
+        default: ""
+      target_location:
+        description: "Location (e.g. Remote)"
+        required: false
+        default: ""
+      greenhouse_companies:
+        description: "Comma-separated Greenhouse company slugs"
+        required: false
+        default: ""
+      lever_companies:
+        description: "Comma-separated Lever company slugs"
+        required: false
+        default: ""
 
 jobs:
   run-pipeline:
@@ -29,16 +46,17 @@ jobs:
                       gspread google-auth google-auth-oauthlib openai
 
       - name: Write credentials.json from secret
-        # The secret must be the raw JSON content of your service account key.
-        # See the hosting setup guide for how to create this secret.
-        run: echo '${{ secrets.GOOGLE_CREDENTIALS_JSON }}' > credentials.json
+        env:
+          GOOGLE_CREDS: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
+        run: printf '%s' "$GOOGLE_CREDS" > credentials.json
 
       - name: Run pipeline
         env:
-          TARGET_ROLE:            ${{ secrets.TARGET_ROLE }}
-          TARGET_LOCATION:        ${{ secrets.TARGET_LOCATION }}
-          GREENHOUSE_COMPANIES:   ${{ secrets.GREENHOUSE_COMPANIES }}
-          LEVER_COMPANIES:        ${{ secrets.LEVER_COMPANIES }}
+          # Form inputs take precedence; fall back to repository secrets for scheduled runs.
+          TARGET_ROLE:            ${{ inputs.target_role      || secrets.TARGET_ROLE }}
+          TARGET_LOCATION:        ${{ inputs.target_location  || secrets.TARGET_LOCATION }}
+          GREENHOUSE_COMPANIES:   ${{ inputs.greenhouse_companies || secrets.GREENHOUSE_COMPANIES }}
+          LEVER_COMPANIES:        ${{ inputs.lever_companies   || secrets.LEVER_COMPANIES }}
           LINKEDIN_ENABLED:       "false"
           GOOGLE_SHEET_NAME:      ${{ secrets.GOOGLE_SHEET_NAME }}
           GOOGLE_CREDENTIALS_PATH: credentials.json
