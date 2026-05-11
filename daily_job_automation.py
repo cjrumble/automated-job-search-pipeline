@@ -24,7 +24,9 @@ for _ in range(6):
     time.sleep(2)
 
 soup = bs4.BeautifulSoup(driver.page_source, "html.parser")
-jobs = soup.find_all("div", class_="base-card")
+# FIX 9b: was class_="base-card" — that is LinkedIn's CSS class, NOT Indeed's.
+# Indeed uses .job_seen_beacon for job cards.
+jobs = soup.find_all("div", class_="job_seen_beacon")
 
 results = []
 is_blocked = soup.title and soup.title.text and "blocked" in soup.title.text.lower()

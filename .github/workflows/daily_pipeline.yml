@@ -1,0 +1,51 @@
+name: Daily Job Search Pipeline
+
+# Runs every day at 9:00 AM UTC (5:00 AM EST / 2:00 AM PST)
+# Also manually triggerable from the GitHub Actions tab at any time.
+on:
+  schedule:
+    - cron: "0 9 * * *"
+  workflow_dispatch:
+
+jobs:
+  run-pipeline:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          # Core dependencies only — LinkedIn/Selenium are optional and disabled
+          pip install requests beautifulsoup4 pandas python-dotenv \
+                      gspread google-auth google-auth-oauthlib openai
+
+      - name: Write credentials.json from secret
+        # The secret must be the raw JSON content of your service account key.
+        # See the hosting setup guide for how to create this secret.
+        run: echo '${{ secrets.GOOGLE_CREDENTIALS_JSON }}' > credentials.json
+
+      - name: Run pipeline
+        env:
+          TARGET_ROLE:            ${{ secrets.TARGET_ROLE }}
+          TARGET_LOCATION:        ${{ secrets.TARGET_LOCATION }}
+          GREENHOUSE_COMPANIES:   ${{ secrets.GREENHOUSE_COMPANIES }}
+          LEVER_COMPANIES:        ${{ secrets.LEVER_COMPANIES }}
+          LINKEDIN_ENABLED:       "false"
+          GOOGLE_SHEET_NAME:      ${{ secrets.GOOGLE_SHEET_NAME }}
+          GOOGLE_CREDENTIALS_PATH: credentials.json
+          EMAIL_SENDER:           ${{ secrets.EMAIL_SENDER }}
+          EMAIL_RECIPIENT:        ${{ secrets.EMAIL_RECIPIENT }}
+          EMAIL_PASSWORD:         ${{ secrets.EMAIL_PASSWORD }}
+          SLACK_WEBHOOK:          ${{ secrets.SLACK_WEBHOOK }}
+          # Optional — remove if you don't have an OpenAI key
+          OPENAI_API_KEY:         ${{ secrets.OPENAI_API_KEY }}
+        run: python run_pipeline.py
