@@ -1,11 +1,9 @@
 """
-scrape_indeed.py — repointed to RemoteOK (Indeed blocks all automated scrapers)
+scrape_remoteok.py — fetches remote job listings from RemoteOK's public JSON API.
 
-Indeed now returns 403 Forbidden to all bots/scripts, including JobSpy.
-RemoteOK (https://remoteok.com/api) is a free public JSON API for remote jobs
-that requires no authentication and is intentionally open for developer use.
-
-The function signature is unchanged so run_pipeline.py needs no edits.
+RemoteOK (https://remoteok.com/api) is a free, open API for remote jobs that
+requires no authentication. It replaced the original Indeed scraper because
+Indeed blocks all automated access with a 403 Forbidden response.
 """
 
 import os
@@ -28,17 +26,17 @@ def _role_to_tags(role: str) -> list[str]:
     return tags or ["qa", "testing"]
 
 
-def scrape_indeed(role=None, location=None, max_jobs=20):
+def scrape_remoteok(role=None, location=None, max_jobs=20):
     """
     Returns remote job listings from RemoteOK's public API.
 
-    The role/location parameters are kept for drop-in compatibility with
-    run_pipeline.py. Location is ignored because RemoteOK lists remote-only jobs.
+    The location parameter is accepted for API compatibility but is unused —
+    all RemoteOK listings are remote by definition.
 
     Args:
         role:     job title / keywords (defaults to TARGET_ROLE env var)
-        location: unused (all RemoteOK jobs are remote)
-        max_jobs: cap on returned listings
+        location: unused — RemoteOK is remote-only
+        max_jobs: cap on returned listings (default 20)
 
     Returns:
         list of job dicts with keys: company, title, link, location, description
@@ -67,10 +65,10 @@ def scrape_indeed(role=None, location=None, max_jobs=20):
             response.raise_for_status()
             data = response.json()
         except requests.RequestException as e:
-            print(f"[scrape_indeed/remoteok] Request failed for tag={tag!r}: {e}")
+            print(f"[scrape_remoteok] Request failed for tag={tag!r}: {e}")
             continue
         except ValueError:
-            print(f"[scrape_indeed/remoteok] Invalid JSON for tag={tag!r}")
+            print(f"[scrape_remoteok] Invalid JSON for tag={tag!r}")
             continue
 
         for item in data:
@@ -95,5 +93,5 @@ def scrape_indeed(role=None, location=None, max_jobs=20):
             unique.append(job)
 
     result = unique[:max_jobs]
-    print(f"[scrape_indeed] Found {len(result)} jobs via RemoteOK (tags: {tags}).")
+    print(f"[scrape_remoteok] Found {len(result)} jobs (tags: {tags}).")
     return result

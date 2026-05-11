@@ -1,7 +1,14 @@
-import os                                # FIX 3a: was missing — caused NameError
+import html
+import os
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+
+
+def _safe_url(url: str) -> str:
+    """Allow only http/https URLs in href attributes; blank anything else."""
+    url = url.strip()
+    return url if url.startswith(("http://", "https://")) else "#"
 
 
 def send_email(jobs, subject=None):
@@ -39,21 +46,26 @@ def send_email(jobs, subject=None):
     # FIX 3c: README promised "styled HTML email digests" — was plain text
     rows_html = ""
     for i, job in enumerate(top_jobs, 1):
-        fit    = job.get("Fit Score", "N/A")
-        salary = job.get("Salary", "N/A")
-        bg     = "#f9f9f9" if i % 2 == 0 else "#ffffff"
+        # Escape all external data before inserting into HTML
+        title   = html.escape(str(job.get("title",    "")))
+        company = html.escape(str(job.get("company",  "")))
+        loc     = html.escape(str(job.get("location", "")))
+        fit     = html.escape(str(job.get("Fit Score", "N/A")))
+        salary  = html.escape(str(job.get("Salary",   "N/A")))
+        link    = _safe_url(job.get("link", ""))
+        bg      = "#f9f9f9" if i % 2 == 0 else "#ffffff"
         rows_html += f"""
         <tr style="background:{bg}">
           <td style="padding:10px;border-bottom:1px solid #eee;font-weight:bold;color:#0066cc">
             #{i}
           </td>
           <td style="padding:10px;border-bottom:1px solid #eee">
-            <a href="{job.get('link', '')}" style="color:#0066cc;text-decoration:none;font-weight:bold">
-              {job.get('title', '')}
+            <a href="{link}" style="color:#0066cc;text-decoration:none;font-weight:bold">
+              {title}
             </a>
           </td>
-          <td style="padding:10px;border-bottom:1px solid #eee">{job.get('company', '')}</td>
-          <td style="padding:10px;border-bottom:1px solid #eee">{job.get('location', '')}</td>
+          <td style="padding:10px;border-bottom:1px solid #eee">{company}</td>
+          <td style="padding:10px;border-bottom:1px solid #eee">{loc}</td>
           <td style="padding:10px;border-bottom:1px solid #eee;color:#2a7a2a;font-weight:bold">
             {fit}/10
           </td>

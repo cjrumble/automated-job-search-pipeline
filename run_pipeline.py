@@ -30,7 +30,7 @@ from estimate_salary    import estimate_salary
 from priority_ranking   import rank_jobs, get_top_jobs
 from scrape_greenhouse  import scrape_greenhouse
 from scrape_lever       import scrape_lever
-from scrape_indeed      import scrape_indeed
+from scrape_remoteok    import scrape_remoteok
 from send_email         import send_email
 from send_slack_alert   import send_slack_alert
 from sync_to_sheets     import sync_jobs_to_sheet
@@ -73,7 +73,7 @@ def run_pipeline():
 
     # RemoteOK  (public JSON API — replaced Indeed which blocks all scrapers)
     print("[Pipeline] RemoteOK → scraping...")
-    all_jobs.extend(scrape_indeed(
+    all_jobs.extend(scrape_remoteok(
         role=os.getenv("TARGET_ROLE",     "QA Automation Engineer"),
         location=os.getenv("TARGET_LOCATION", "Remote")
     ))

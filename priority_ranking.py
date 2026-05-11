@@ -34,12 +34,15 @@ def rank_jobs(jobs):
 
 def get_top_jobs(jobs, n=10):
     """
-    Returns the top N jobs after ranking. Convenience wrapper around rank_jobs().
+    Returns the top N jobs from an already-ranked list.
+
+    Expects jobs to have already been passed through rank_jobs().
+    Does not re-sort — slices the first n entries by Priority.
 
     Args:
-        jobs: list of job dicts
+        jobs: list of ranked job dicts (output of rank_jobs())
         n:    how many top jobs to return (default 10)
     Returns:
-        list of up to n ranked job dicts
+        list of up to n job dicts
     """
-    return rank_jobs(jobs)[:n]
+    return jobs[:n]
