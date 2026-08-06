@@ -1,27 +1,28 @@
-﻿“Blue Shield of California”, “https://ecge.fa.us2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1003/jobs”
-“Kaiser Permanente”, “https://www.kaiserpermanentejobs.org/”
-“Akamai”, “https://jobs.akamai.com/en/sites/CX_1”
-“CVS Health”, “https://jobs.cvshealth.com/us/en/job/”
-“TPX”, “https://myjobs.adp.com/tpxcareers/cx/”
-“Make-A-Wish-America”, “https://job-boards.greenhouse.io/makeawishamerica/jobs/”
-“Citigroup”, “https://jobs.citi.com/search-jobs”
-“Databricks”, 
-https://www.databricks.com/company/careers/open-positions”
-“Accenture”, “https://www.accenture.com/us-en/careers/jobsearch”
-“Discord”, “https://discord.com/careers”
-“Baton”, “https://job-boards.greenhouse.io/baton”
-“Simplisafe”, “https://careers.simplisafe.com/search/”
-“Pinterest”, “https://www.pinterestcareers.com/jobs/”
-“Aptos”, “https://aptos.wd108.myworkdayjobs.com/Aptos”
-“Glean”, “https://www.glean.com/careers#open-positions”
-“Astranis”, https://www.astranis.com/careers#open-roles
-“Postman”, “https://job-boards.greenhouse.io/postman/”
-“IBM”,  “https://www.ibm.com/careers/search”
-“Kohler”, “https://www.kohlercompany.com/careers/search-careers/”
-“BNY”, “https://eofe.fa.us2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/BNY-Careers/jobs”
-“Amazon”, “https://www.amazon.jobs/en/jobs”
-“McKesson”, “https://careers.mckesson.com/en/job”
-“USAA”, “https://www.usaajobs.com/job”
-“PGE”, “https://jobs.pge.com/job”
-“Zoox”, “https://zoox.com/careers”
-“Mainspring Energy”, https://jobs.lever.co/mainspringenergy
+[
+  { "name": "Blue Shield of California", "url": "https://ecge.fa.us2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1003/jobs" },
+  { "name": "Kaiser Permanente", "url": "https://www.kaiserpermanentejobs.org/" },
+  { "name": "Akamai", "url": "https://jobs.akamai.com/en/sites/CX_1" },
+  { "name": "CVS Health", "url": "https://jobs.cvshealth.com/us/en/job/" },
+  { "name": "TPX", "url": "https://myjobs.adp.com/tpxcareers/cx/" },
+  { "name": "Make-A-Wish America", "url": "https://job-boards.greenhouse.io/makeawishamerica/jobs/" },
+  { "name": "Citigroup", "url": "https://jobs.citi.com/search-jobs" },
+  { "name": "Databricks", "url": "https://www.databricks.com/company/careers/open-positions" },
+  { "name": "Accenture", "url": "https://www.accenture.com/us-en/careers/jobsearch" },
+  { "name": "Discord", "url": "https://discord.com/careers" },
+  { "name": "Baton", "url": "https://job-boards.greenhouse.io/baton" },
+  { "name": "Simplisafe", "url": "https://careers.simplisafe.com/search/" },
+  { "name": "Pinterest", "url": "https://www.pinterestcareers.com/jobs/" },
+  { "name": "Aptos", "url": "https://aptos.wd108.myworkdayjobs.com/Aptos" },
+  { "name": "Glean", "url": "https://www.glean.com/careers#open-positions" },
+  { "name": "Astranis", "url": "https://www.astranis.com/careers#open-roles" },
+  { "name": "Postman", "url": "https://job-boards.greenhouse.io/postman/" },
+  { "name": "IBM", "url": "https://www.ibm.com/careers/search" },
+  { "name": "Kohler", "url": "https://www.kohlercompany.com/careers/search-careers/" },
+  { "name": "BNY", "url": "https://eofe.fa.us2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/BNY-Careers/jobs" },
+  { "name": "Amazon", "url": "https://www.amazon.jobs/en/jobs" },
+  { "name": "McKesson", "url": "https://careers.mckesson.com/en/job" },
+  { "name": "USAA", "url": "https://www.usaajobs.com/job" },
+  { "name": "PGE", "url": "https://jobs.pge.com/job" },
+  { "name": "Zoox", "url": "https://zoox.com/careers" },
+  { "name": "Mainspring Energy", "url": "https://jobs.lever.co/mainspringenergy" }
+]

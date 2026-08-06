@@ -13,8 +13,12 @@ Required .env vars:
     EMAIL_SENDER, EMAIL_RECIPIENT, EMAIL_PASSWORD
     SLACK_WEBHOOK
     GOOGLE_SHEET_NAME, GOOGLE_CREDENTIALS_PATH
-    GREENHOUSE_COMPANIES  (comma-separated, e.g. "stripe,airbnb,shopify")
-    LEVER_COMPANIES       (comma-separated, e.g. "netflix,datadog")
+    GREENHOUSE_COMPANIES  (optional, comma-separated, e.g. "stripe,airbnb")
+    LEVER_COMPANIES       (optional, comma-separated, e.g. "netflix,datadog")
+    COMPANIES_JSON_PATH   (optional — defaults to "companies.json"; a JSON
+                            list of {"name","url"} company career pages,
+                            auto-routed to the Greenhouse/Lever/generic
+                            scraper — see company_loader.py)
     LINKEDIN_ENABLED      (set to "true" to enable — requires chromedriver)
     OPENAI_API_KEY        (optional — enables AI job parsing)
 """
@@ -25,15 +29,20 @@ from dotenv import load_dotenv
 load_dotenv()                            # must come before any other local imports
 
 from advanced_fit_score import advanced_fit_score
+from company_loader     import load_companies, build_source_lists, CompanyListError
 from dedupe_jobs        import dedupe_jobs
 from estimate_salary    import estimate_salary
+from generate_static_report import generate_static_report
 from priority_ranking   import rank_jobs, get_top_jobs
+from scrape_generic     import scrape_generic
 from scrape_greenhouse  import scrape_greenhouse
 from scrape_lever       import scrape_lever
 from scrape_remoteok    import scrape_remoteok
 from send_email         import send_email
 from send_slack_alert   import send_slack_alert
 from sync_to_sheets     import sync_jobs_to_sheet
+
+COMPANIES_JSON_PATH = os.getenv("COMPANIES_JSON_PATH", "companies.json")
 
 # AI parsing is optional — only runs when OPENAI_API_KEY is set
 AI_PARSING_ENABLED = bool(os.getenv("OPENAI_API_KEY"))
@@ -59,17 +68,40 @@ def run_pipeline():
 
     # ── Stage 1: Scrape all sources ───────────────────────────
 
+    # companies.json  (preferred source — name+url pairs, auto-routed to
+    # the Greenhouse/Lever/generic scraper based on the URL's ATS)
+    greenhouse_slugs, lever_slugs, generic_companies = [], [], []
+    try:
+        companies = load_companies(COMPANIES_JSON_PATH)
+        sources = build_source_lists(companies)
+        greenhouse_slugs   = sources["greenhouse_slugs"]
+        lever_slugs        = sources["lever_slugs"]
+        generic_companies  = sources["generic"]
+        print(
+            f"[Pipeline] Loaded {len(companies)} companies from "
+            f"'{COMPANIES_JSON_PATH}' → {len(greenhouse_slugs)} Greenhouse, "
+            f"{len(lever_slugs)} Lever, {len(generic_companies)} generic."
+        )
+    except CompanyListError as e:
+        print(f"[Pipeline] {e} Falling back to GREENHOUSE_COMPANIES/LEVER_COMPANIES env vars only.")
+
     # Greenhouse  (public API, no auth needed, most reliable)
-    greenhouse_companies = _parse_companies("GREENHOUSE_COMPANIES")
-    for company in greenhouse_companies:
+    greenhouse_companies = _parse_companies("GREENHOUSE_COMPANIES") + greenhouse_slugs
+    for company in dict.fromkeys(greenhouse_companies):  # de-dupe, preserve order
         print(f"\n[Pipeline] Greenhouse → {company}")
         all_jobs.extend(scrape_greenhouse(company))
 
     # Lever  (public API, no auth needed)
-    lever_companies = _parse_companies("LEVER_COMPANIES")
-    for company in lever_companies:
+    lever_companies = _parse_companies("LEVER_COMPANIES") + lever_slugs
+    for company in dict.fromkeys(lever_companies):
         print(f"[Pipeline] Lever → {company}")
         all_jobs.extend(scrape_lever(company))
+
+    # Generic  (companies.json entries that aren't Greenhouse/Lever — best
+    # effort static-HTML scrape; JS-rendered boards will return no results)
+    for company in generic_companies:
+        print(f"[Pipeline] Generic → {company['name']}")
+        all_jobs.extend(scrape_generic(company["name"], company["url"]))
 
     # RemoteOK  (public JSON API — replaced Indeed which blocks all scrapers)
     print("[Pipeline] RemoteOK → scraping...")
@@ -134,6 +166,10 @@ def run_pipeline():
     # ── Stage 7: Slack alert ──────────────────────────────────
     print("[Pipeline] Sending Slack alert...")
     send_slack_alert(top_jobs)
+
+    # ── Stage 8: Static site (for Netlify) ────────────────────
+    print("[Pipeline] Writing static report to site/ ...")
+    generate_static_report(ranked_jobs)
 
     print("\n" + "=" * 60)
     print(f"  Pipeline complete — {len(ranked_jobs)} jobs processed.")

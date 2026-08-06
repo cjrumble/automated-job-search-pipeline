@@ -1,0 +1,14 @@
+# Netlify hosts the static results dashboard only.
+# The actual Python scraping/scoring pipeline still runs on GitHub Actions
+# (Netlify has no Python function runtime) — see README "Deploying the
+# dashboard to Netlify" for the full explanation and the two ways to wire
+# GitHub Actions -> Netlify together.
+
+[build]
+  publish = "site"
+  command = "echo 'Nothing to build — site/ is committed by the pipeline run.'"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Cache-Control = "public, max-age=300"
