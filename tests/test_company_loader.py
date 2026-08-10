@@ -87,8 +87,10 @@ def test_load_companies_strips_whitespace(tmp_path):
     ("https://job-boards.greenhouse.io/postman/", "greenhouse"),
     ("https://boards.greenhouse.io/stripe/jobs/12345", "greenhouse"),
     ("https://jobs.lever.co/mainspringenergy", "lever"),
+    ("https://aptos.wd108.myworkdayjobs.com/Aptos", "js_rendered"),
+    ("https://ecge.fa.us2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1003/jobs", "js_rendered"),
+    ("https://myjobs.adp.com/tpxcareers/cx/", "js_rendered"),
     ("https://www.kaiserpermanentejobs.org/", "generic"),
-    ("https://aptos.wd108.myworkdayjobs.com/Aptos", "generic"),
 ])
 def test_classify_url(url, expected):
     assert classify_url(url) == expected
@@ -116,6 +118,7 @@ def test_build_source_lists_routes_each_company_correctly():
         {"name": "Postman", "url": "https://job-boards.greenhouse.io/postman/"},
         {"name": "Mainspring Energy", "url": "https://jobs.lever.co/mainspringenergy"},
         {"name": "Kaiser Permanente", "url": "https://www.kaiserpermanentejobs.org/"},
+        {"name": "Aptos", "url": "https://aptos.wd108.myworkdayjobs.com/Aptos"},
     ]
 
     result = build_source_lists(companies)
@@ -124,11 +127,13 @@ def test_build_source_lists_routes_each_company_correctly():
     assert result["lever_slugs"] == ["mainspringenergy"]
     assert len(result["generic"]) == 1
     assert result["generic"][0]["name"] == "Kaiser Permanente"
+    assert len(result["js_rendered"]) == 1
+    assert result["js_rendered"][0]["name"] == "Aptos"
 
 
 def test_build_source_lists_empty_input_returns_empty_buckets():
     result = build_source_lists([])
-    assert result == {"greenhouse_slugs": [], "lever_slugs": [], "generic": []}
+    assert result == {"greenhouse_slugs": [], "lever_slugs": [], "js_rendered": [], "generic": []}
 
 
 def test_build_source_lists_against_the_real_companies_json():
@@ -143,5 +148,12 @@ def test_build_source_lists_against_the_real_companies_json():
     assert "baton" in result["greenhouse_slugs"]
     # Mainspring Energy uses Lever
     assert "mainspringenergy" in result["lever_slugs"]
+    # Aptos (Workday), Blue Shield + BNY (Oracle Cloud), TPX (ADP) are JS-rendered
+    js_names = {c["name"] for c in result["js_rendered"]}
+    assert {"Aptos", "Blue Shield of California", "BNY", "TPX"} <= js_names
     # Everything else falls through to generic
-    assert len(result["generic"]) == len(companies) - len(result["greenhouse_slugs"]) - len(result["lever_slugs"])
+    total_routed = (
+        len(result["greenhouse_slugs"]) + len(result["lever_slugs"])
+        + len(result["js_rendered"]) + len(result["generic"])
+    )
+    assert total_routed == len(companies)

@@ -35,6 +35,7 @@ from estimate_salary    import estimate_salary
 from generate_static_report import generate_static_report
 from priority_ranking   import rank_jobs, get_top_jobs
 from scrape_generic     import scrape_generic
+from scrape_js          import scrape_js_sites
 from scrape_greenhouse  import scrape_greenhouse
 from scrape_lever       import scrape_lever
 from scrape_remoteok    import scrape_remoteok
@@ -69,18 +70,20 @@ def run_pipeline():
     # ── Stage 1: Scrape all sources ───────────────────────────
 
     # companies.json  (preferred source — name+url pairs, auto-routed to
-    # the Greenhouse/Lever/generic scraper based on the URL's ATS)
-    greenhouse_slugs, lever_slugs, generic_companies = [], [], []
+    # the Greenhouse/Lever/JS-rendered/generic scraper based on the URL's ATS)
+    greenhouse_slugs, lever_slugs, js_rendered_companies, generic_companies = [], [], [], []
     try:
         companies = load_companies(COMPANIES_JSON_PATH)
         sources = build_source_lists(companies)
-        greenhouse_slugs   = sources["greenhouse_slugs"]
-        lever_slugs        = sources["lever_slugs"]
-        generic_companies  = sources["generic"]
+        greenhouse_slugs      = sources["greenhouse_slugs"]
+        lever_slugs           = sources["lever_slugs"]
+        js_rendered_companies = sources["js_rendered"]
+        generic_companies     = sources["generic"]
         print(
             f"[Pipeline] Loaded {len(companies)} companies from "
             f"'{COMPANIES_JSON_PATH}' → {len(greenhouse_slugs)} Greenhouse, "
-            f"{len(lever_slugs)} Lever, {len(generic_companies)} generic."
+            f"{len(lever_slugs)} Lever, {len(js_rendered_companies)} JS-rendered, "
+            f"{len(generic_companies)} generic."
         )
     except CompanyListError as e:
         print(f"[Pipeline] {e} Falling back to GREENHOUSE_COMPANIES/LEVER_COMPANIES env vars only.")
@@ -102,6 +105,12 @@ def run_pipeline():
     for company in generic_companies:
         print(f"[Pipeline] Generic → {company['name']}")
         all_jobs.extend(scrape_generic(company["name"], company["url"]))
+
+    # JS-rendered  (Workday / Oracle Cloud / ADP — one shared headless
+    # browser instance handles the whole batch; see scrape_js.py)
+    if js_rendered_companies:
+        print(f"[Pipeline] JS-rendered → scraping {len(js_rendered_companies)} companies with Playwright...")
+        all_jobs.extend(scrape_js_sites(js_rendered_companies))
 
     # RemoteOK  (public JSON API — replaced Indeed which blocks all scrapers)
     print("[Pipeline] RemoteOK → scraping...")

@@ -6,6 +6,11 @@ gspread>=5.11.0
 google-auth>=2.23.0
 google-auth-oauthlib>=1.1.0
 
+# Headless-browser rendering for JS-heavy career sites (Workday, Oracle Cloud,
+# ADP) that the static scrape_generic.py can't see into. Requires a one-time
+# `playwright install chromium` after `pip install` — see README.
+playwright>=1.45.0
+
 # Optional: AI job parsing (set OPENAI_API_KEY in .env to enable)
 openai>=1.0.0
 

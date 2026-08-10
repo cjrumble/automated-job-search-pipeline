@@ -10,16 +10,26 @@ companies.json format (list of objects):
     ]
 
 Only Greenhouse and Lever expose a public, unauthenticated JSON API, so those
-are the two sources the pipeline can scrape automatically. Every other URL
-(Workday, Oracle Cloud/Taleo, ADP, a company's own custom careers page, etc.)
-is routed to scrape_generic, a best-effort HTML scraper — see scrape_generic.py
-for its limits.
+are the two sources the pipeline can scrape automatically without a browser.
+Workday, Oracle Cloud/Taleo, and ADP render their listings client-side with
+JavaScript, so those are routed to the Playwright-based scraper instead of
+the plain-HTML one. Anything else falls back to a best-effort static scrape
+— see scrape_generic.py and scrape_js.py for what each actually does.
 """
 
 import json
 from urllib.parse import urlparse
 
 REQUIRED_KEYS = ("name", "url")
+
+# Hostname fragments for ATS platforms known to render job listings with
+# client-side JS. requests+BeautifulSoup can't see into these — they need
+# scrape_js.py (Playwright) instead of scrape_generic.py.
+_JS_RENDERED_HOSTS = (
+    "myworkdayjobs.com",   # Workday
+    "oraclecloud.com",     # Oracle Cloud / Fusion HCM "CX" boards
+    "adp.com",             # ADP (myjobs.adp.com)
+)
 
 
 class CompanyListError(ValueError):
@@ -73,7 +83,7 @@ def classify_url(url):
     """
     Determines which scraper can handle a given careers-site URL.
 
-    Returns one of: "greenhouse", "lever", "generic"
+    Returns one of: "greenhouse", "lever", "js_rendered", "generic"
     """
     host = urlparse(url).netloc.lower()
 
@@ -81,6 +91,8 @@ def classify_url(url):
         return "greenhouse"
     if "lever.co" in host:
         return "lever"
+    if any(fragment in host for fragment in _JS_RENDERED_HOSTS):
+        return "js_rendered"
     return "generic"
 
 
@@ -116,10 +128,11 @@ def build_source_lists(companies):
         {
           "greenhouse_slugs": [str, ...],
           "lever_slugs":      [str, ...],
+          "js_rendered":      [{"name": str, "url": str}, ...],
           "generic":          [{"name": str, "url": str}, ...],
         }
     """
-    greenhouse_slugs, lever_slugs, generic = [], [], []
+    greenhouse_slugs, lever_slugs, js_rendered, generic = [], [], [], []
 
     for company in companies:
         board = classify_url(company["url"])
@@ -136,11 +149,14 @@ def build_source_lists(companies):
                 lever_slugs.append(slug)
             else:
                 print(f"[company_loader] Couldn't parse Lever slug for '{company['name']}' — skipping.")
+        elif board == "js_rendered":
+            js_rendered.append(company)
         else:
             generic.append(company)
 
     return {
         "greenhouse_slugs": greenhouse_slugs,
         "lever_slugs": lever_slugs,
+        "js_rendered": js_rendered,
         "generic": generic,
     }

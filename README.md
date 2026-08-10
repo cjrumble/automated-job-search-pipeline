@@ -41,17 +41,22 @@ URL:
 |----------------------|---------------------|-------|
 | `greenhouse.io`      | `scrape_greenhouse.py` | Public JSON API — reliable |
 | `lever.co`            | `scrape_lever.py`      | Public JSON API — reliable |
-| anything else          | `scrape_generic.py`    | Best-effort static HTML scrape — see limitation below |
+| `myworkdayjobs.com`, `oraclecloud.com`, `adp.com` | `scrape_js.py` | Headless Chromium via Playwright — see below |
+| anything else          | `scrape_generic.py`    | Best-effort static HTML scrape |
 
-**Generic-site limitation:** Workday, Oracle Cloud/Taleo, and ADP boards
-(most of the sample `companies.json`) render their listings with
-client-side JavaScript. `scrape_generic.py` only fetches static HTML, so it
-will correctly return an empty list for those — that's expected behavior,
-not a bug. Only companies whose careers page ships job links in the raw
-HTML (or that already use Greenhouse/Lever) will return real results without
-further work. A production fix would add a headless-browser scraper (e.g.
-Playwright) for the JS-rendered boards; that's a larger addition intentionally
-left out of this change so the pipeline keeps its "no browser required" setup.
+**JS-rendered sites (Workday, Oracle Cloud, ADP):** these render listings
+client-side, so plain `requests` can't see them. `scrape_js.py` uses
+Playwright to load the page in headless Chromium, wait for the listings to
+actually appear, then extract them — with a tailored CSS selector for each
+known ATS and a generic link-text fallback for anything else. One shared
+browser instance is used for the whole batch per run (launching a new
+browser per company would make the pipeline dramatically slower). If
+Playwright isn't installed, these companies are skipped with a warning
+instead of crashing the run — see "Adding Playwright" below to enable them.
+
+**Fully custom/unknown sites:** `scrape_generic.py` only fetches static
+HTML — if a company's board isn't on the JS-rendered list above and also
+isn't in the raw HTML, it will legitimately return no results.
 
 You can still target companies the old way, too — `GREENHOUSE_COMPANIES` and
 `LEVER_COMPANIES` env vars are read and merged with `companies.json` (with
@@ -62,15 +67,82 @@ non-object entries) are skipped individually with a warning instead of
 crashing the run. If the file itself is missing or not valid JSON, the
 pipeline logs that and falls back to the env-var lists only.
 
+## Adding Playwright (JS-rendered boards)
+
+`scrape_js.py` and the `js_rendered` routing already ship in this repo — this
+is what you need to run to actually enable it locally/in CI:
+
+1. **Install the Python package** (already in `requirements.txt`):
+   ```
+   pip install -r requirements.txt
+   ```
+2. **Download the browser binary** — this is a separate step from `pip
+   install`; Playwright ships the driver as a Python package but the actual
+   Chromium binary is downloaded on demand:
+   ```
+   playwright install chromium
+   ```
+   (Use `playwright install --with-deps chromium` on a bare Linux box/CI
+   runner — the `--with-deps` flag also installs the OS libraries Chromium
+   needs, e.g. `libnss3`, fonts. `.github/workflows/daily_pipeline.yml`
+   already has this step added.)
+3. **Nothing else to configure** — `company_loader.classify_url()` already
+   routes `myworkdayjobs.com` / `oraclecloud.com` / `adp.com` URLs to
+   `scrape_js.py` automatically; `run_pipeline.py` calls
+   `scrape_js_sites()` with that batch as its own pipeline stage.
+4. **Add selectors for ATS platforms you use that aren't covered yet** — the
+   three built in (`_ATS_SELECTORS` in `scrape_js.py`) were written from
+   general knowledge of those platforms' DOM structure, not verified
+   against a live board from this sandbox (its network is locked to package
+   registries — see "Limitations" below). Before relying on results,
+   open one real board from each ATS you use in a real browser, inspect the
+   job-title element, and confirm/update the selector:
+   ```python
+   _ATS_SELECTORS = {
+       "myworkdayjobs.com": "a[data-automation-id='jobTitle']",
+       "oraclecloud.com":   "a[data-qa='searchResultsJobTitle'], a.job-title-link",
+       "adp.com":           "a.job-tile, a[data-automation='job-title']",
+   }
+   ```
+   If a selector doesn't match, `scrape_js.py` logs a selector-timeout
+   warning naming the company rather than failing silently — that's your
+   signal to go update the selector.
+5. **Run it**:
+   ```
+   python run_pipeline.py
+   ```
+   Look for a `[Pipeline] JS-rendered → scraping N companies with
+   Playwright...` line, followed by one `[scrape_js] Found K jobs at
+   '<company>' (rendered).` line per company.
+
+**Limitations to know about:**
+- Headless Chromium is much heavier than `requests` — expect the JS-rendered
+  stage to take noticeably longer than Greenhouse/Lever/generic, especially
+  as the company list grows. `scrape_js_sites()` reuses one browser for the
+  whole batch to keep this manageable, but each page still needs its own
+  navigation + render wait.
+- CI runners need the `--with-deps` install step (already added) or
+  Chromium will fail to launch with missing shared-library errors.
+- Some boards add bot detection (CAPTCHAs, headless-browser fingerprinting)
+  that plain Playwright won't get past — that's outside the scope of this
+  change.
+- This repo's tests (`tests/test_scrape_js.py`) run against local rendered
+  HTML via `page.set_content()`, not live company sites, so they verify the
+  wait/extract logic but can't confirm any specific real board's selector
+  still matches — re-verify selectors periodically as ATS vendors change
+  their markup.
+
+
 ## Architecture
 
 ```
 [companies.json] ──► [company_loader.py: classify + route]
                               │
-        ┌─────────────┬───────┴────────┬───────────────┐
-        ▼             ▼                ▼               ▼
-   [Greenhouse]    [Lever]       [Generic HTML]     [RemoteOK]   [LinkedIn*]
-        └─────────────┴────────────────┴───────────────┴─────────────┘
+        ┌─────────────┬───────┼────────────┬───────────────┐
+        ▼             ▼       ▼            ▼               ▼
+   [Greenhouse]    [Lever] [JS-rendered  [Generic HTML]  [RemoteOK]   [LinkedIn*]
+                            Playwright]
+        └─────────────┴───────┴────────────┴───────────────┴─────────────┘
                                      ▼
                        [Unified Scraper Layer]
                                      ▼
@@ -105,17 +177,22 @@ See `.env.example` for all required environment variables and where to get each 
 
 ## Testing
 
-Unit tests cover the new company-loading/routing logic, the generic
-scraper, and the static report generator — all with mocked HTTP calls, so
-`pytest` runs offline with no credentials required.
+Unit tests cover the new company-loading/routing logic, the generic and
+JS-rendered scrapers, and the static report generator. Most run fully
+offline with mocked HTTP calls; `tests/test_scrape_js.py` uses real headless
+Chromium against locally-set HTML (no external network needed) so it
+actually exercises Playwright's render/wait/extract path rather than mocking
+it away.
 
 ```
-pip install pytest
+pip install -r requirements.txt
+playwright install chromium   # only needed for tests/test_scrape_js.py
 pytest tests/ -v
 ```
 
-Current suite: 29 tests across `tests/test_company_loader.py`,
-`tests/test_scrape_generic.py`, `tests/test_generate_static_report.py`, and
+Current suite: 39 tests across `tests/test_company_loader.py`,
+`tests/test_scrape_generic.py`, `tests/test_scrape_js.py`,
+`tests/test_generate_static_report.py`, and
 `tests/test_run_pipeline_companies.py`.
 
 ## Automated hosting (free)
@@ -159,4 +236,4 @@ delivery/hosting layer, not the runtime.
 
 ## Tech stack
 
-Python 3.11 · requests · BeautifulSoup · gspread · pandas · python-dotenv · OpenAI API (optional) · pytest
+Python 3.11 · requests · BeautifulSoup · Playwright · gspread · pandas · python-dotenv · OpenAI API (optional) · pytest
