@@ -63,12 +63,18 @@ def scrape_remoteok(role=None, location=None, max_jobs=20):
                 timeout=10,
             )
             response.raise_for_status()
-            data = response.json()
+            # Decode explicitly as UTF-8 rather than trusting response.json(),
+            # which falls back to guessing an encoding (often Latin-1) when
+            # the server's Content-Type header omits a charset — that
+            # mismatch is what turns a right single quote (U+2019) into
+            # mojibake like "donâ€™t" in job titles/descriptions.
+            import json as _json
+            data = _json.loads(response.content.decode("utf-8"))
         except requests.RequestException as e:
             print(f"[scrape_remoteok] Request failed for tag={tag!r}: {e}")
             continue
-        except ValueError:
-            print(f"[scrape_remoteok] Invalid JSON for tag={tag!r}")
+        except (ValueError, UnicodeDecodeError):
+            print(f"[scrape_remoteok] Invalid JSON/encoding for tag={tag!r}")
             continue
 
         for item in data:

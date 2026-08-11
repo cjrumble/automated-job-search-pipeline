@@ -19,10 +19,10 @@
   { "name": "IBM", "url": "https://www.ibm.com/careers/search" },
   { "name": "Kohler", "url": "https://www.kohlercompany.com/careers/search-careers/" },
   { "name": "BNY", "url": "https://eofe.fa.us2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/BNY-Careers/jobs" },
-  { "name": "Amazon", "url": "https://www.amazon.jobs/en/jobs" },
-  { "name": "McKesson", "url": "https://careers.mckesson.com/en/job" },
-  { "name": "USAA", "url": "https://www.usaajobs.com/job" },
-  { "name": "PGE", "url": "https://jobs.pge.com/job" },
+  { "name": "Amazon", "url": "https://www.amazon.jobs/en/search" },
+  { "name": "McKesson", "url": "https://careers.mckesson.com/en/search-jobs" },
+  { "name": "USAA", "url": "https://www.usaajobs.com/search-jobs" },
+  { "name": "PGE", "url": "https://jobs.pge.com/search-jobs" },
   { "name": "Zoox", "url": "https://zoox.com/careers" },
   { "name": "Mainspring Energy", "url": "https://jobs.lever.co/mainspringenergy" }
 ]

@@ -53,6 +53,44 @@ def _get_sheet(spreadsheet_name):
             "download the JSON key, then set GOOGLE_CREDENTIALS_PATH in .env."
         )
 
+    # Fail with a clear, actionable message instead of a cryptic
+    # "Expecting value: line 1 column 1 (char 0)" JSONDecodeError when the
+    # file exists but is empty or not valid JSON — this happens in CI when
+    # the GOOGLE_CREDENTIALS_JSON secret is unset/empty, since
+    # `printf '%s' "$GOOGLE_CREDS" > credentials.json` silently writes a
+    # 0-byte file rather than failing the step.
+    file_size = os.path.getsize(creds_path)
+    if file_size == 0:
+        raise ValueError(
+            f"Credentials file '{creds_path}' is empty (0 bytes).\n"
+            "This means the GOOGLE_CREDENTIALS_JSON secret is missing, empty, "
+            "or misnamed in your GitHub repo (Settings -> Secrets and "
+            "variables -> Actions). It should contain the FULL contents of "
+            "your Google service account JSON key file."
+        )
+
+    with open(creds_path, "r", encoding="utf-8") as f:
+        raw = f.read()
+    try:
+        import json
+        parsed = json.loads(raw)
+    except json.JSONDecodeError as e:
+        raise ValueError(
+            f"Credentials file '{creds_path}' is not valid JSON ({e}).\n"
+            "The GOOGLE_CREDENTIALS_JSON secret's value must be the raw JSON "
+            "content of your service account key, copy-pasted exactly as "
+            "downloaded from Google Cloud Console — no extra quoting, no "
+            "trailing/leading whitespace trimmed incorrectly."
+        )
+    missing_keys = [k for k in ("type", "client_email", "private_key") if k not in parsed]
+    if missing_keys:
+        raise ValueError(
+            f"Credentials file '{creds_path}' is valid JSON but is missing "
+            f"expected service-account key(s): {missing_keys}. Make sure "
+            "the secret contains a service-account key file, not an OAuth "
+            "client ID or API key."
+        )
+
     creds  = Credentials.from_service_account_file(creds_path, scopes=SCOPES)
     client = gspread.authorize(creds)
 

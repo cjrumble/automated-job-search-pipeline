@@ -202,6 +202,19 @@ pipeline daily at 9 AM UTC. All secrets are stored in GitHub Repository Secrets
 — nothing sensitive lives in the codebase. **This is still where the Python
 code actually runs** — Netlify (below) only hosts the results page.
 
+## Troubleshooting common CI failures
+
+These are failure modes that have actually shown up in production runs, with root cause and fix:
+
+| Symptom in the log | Root cause | Fix |
+|---|---|---|
+| `[sync_to_sheets] Could not open spreadsheet: Expecting value: line 1 column 1 (char 0)` | `GOOGLE_CREDENTIALS_JSON` secret is empty/unset, so the workflow's `printf` step writes a 0-byte `credentials.json` | Set `GOOGLE_CREDENTIALS_JSON` in **Settings → Secrets and variables → Actions** to the full contents of your service-account key file. `sync_to_sheets.py` now detects this and raises a specific "credentials file is empty" error instead of a cryptic JSON error. |
+| `[send_email] Gmail auth failed.` | `EMAIL_PASSWORD` secret is a regular account password, not a Gmail **App Password** | Enable 2-Step Verification on the Gmail account, generate an App Password at [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords), and put that 16-character value in the `EMAIL_PASSWORD` secret. |
+| Hundreds of `[scrape_greenhouse]`/`[scrape_lever] Request failed ... 404` lines, run takes several minutes longer than it should | The legacy `GREENHOUSE_COMPANIES`/`LEVER_COMPANIES` secrets still hold a large historical list of company *display names* (e.g. `"3M Company"`, `"Bain & Company"`) that mostly aren't real Greenhouse/Lever board slugs | These 404s are handled gracefully and don't fail the run, but they're pure waste. Since `companies.json` is now the source of truth, either clear both secrets entirely, or trim them down to only confirmed-working slugs (check the log for which ones returned `Found N jobs`, even `Found 0 jobs` — that means the slug is valid). |
+| `[scrape_js] playwright is not installed — skipping N JS-rendered companies.` | The workflow that actually ran doesn't have `playwright` in its `pip install` line and/or is missing the `playwright install --with-deps chromium` step | Confirm `.github/workflows/daily_pipeline.yml` on the branch GitHub Actions runs from includes both — they're already present in this repo's copy; if you still see this, the live workflow file on GitHub is out of date and needs the current version merged in. |
+| `[scrape_generic] Request failed for '<company>': 404 Client Error` | The URL in `companies.json` for that company is stale (site restructured) | Find the company's current careers-search URL and update its entry in `companies.json`. (Amazon, McKesson, USAA, and PG&E were fixed for this reason.) |
+| Garbled characters in job titles/descriptions, e.g. `donâ€™t` instead of `don't` | `scrape_remoteok.py` let `requests` guess the response encoding via `.json()`, which occasionally mis-detects UTF-8 as Latin-1 | Fixed — the scraper now decodes the response as UTF-8 explicitly before parsing JSON. |
+
 ## Deploying the dashboard to Netlify
 
 Netlify doesn't run Python (its Functions runtime is JS/TS/Go only), so it
