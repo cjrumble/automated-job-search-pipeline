@@ -54,10 +54,10 @@ def test_load_companies_top_level_not_a_list_raises(tmp_path):
 def test_load_companies_skips_entries_missing_required_keys(tmp_path, capsys):
     data = [
         {"name": "Postman", "url": "https://job-boards.greenhouse.io/postman/"},
-        {"name": "No URL Co"},                      # missing url
-        {"url": "https://example.com"},              # missing name
-        {"name": "", "url": "https://example.com"},  # blank name
-        "not even an object",                         # wrong type
+        {"name": "No URL Co"},                      # missing url -> placeholder
+        {"url": "https://example.com"},              # missing name -> structural warning
+        {"name": "", "url": "https://example.com"},  # blank name -> structural warning
+        "not even an object",                         # wrong type -> structural warning
     ]
     path = tmp_path / "companies.json"
     path.write_text(json.dumps(data))
@@ -66,8 +66,35 @@ def test_load_companies_skips_entries_missing_required_keys(tmp_path, capsys):
 
     assert len(companies) == 1
     assert companies[0]["name"] == "Postman"
-    # warnings were printed rather than raising
-    assert "Skipping entry" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    # structural problems (missing name / wrong type) still warn individually
+    assert "Skipping entry" in out
+    # placeholders (name but no url) are summarized once, not per-entry
+    assert "Skipped 1 companies with no url yet" in out
+
+
+def test_load_companies_placeholder_entries_are_silently_excluded(tmp_path, capsys):
+    """
+    A company with a name but no url yet (url is null, missing, or blank)
+    is a legitimate placeholder — companies.json may hold hundreds of these
+    while URLs are being researched. They should not appear in the returned
+    list, and should not produce one warning line each.
+    """
+    data = [
+        {"name": "Boeing", "url": None},
+        {"name": "Chevron"},                 # url key entirely absent
+        {"name": "Walmart", "url": ""},
+        {"name": "Postman", "url": "https://job-boards.greenhouse.io/postman/"},
+    ]
+    path = tmp_path / "companies.json"
+    path.write_text(json.dumps(data))
+
+    companies = load_companies(str(path))
+
+    assert [c["name"] for c in companies] == ["Postman"]
+    out = capsys.readouterr().out
+    assert out.count("Skipping entry") == 0
+    assert "Skipped 3 companies with no url yet" in out
 
 
 def test_load_companies_strips_whitespace(tmp_path):
@@ -82,6 +109,28 @@ def test_load_companies_strips_whitespace(tmp_path):
 
 
 # ── classify_url ────────────────────────────────────────────────
+
+def test_real_companies_json_placeholder_entries_are_excluded_not_errored():
+    """
+    companies.json intentionally holds hundreds of placeholder entries
+    (name known, url not yet researched) merged in from a legacy company
+    list. load_companies must skip these without raising and without
+    flooding the log with one warning per entry.
+    """
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    path = os.path.join(repo_root, "companies.json")
+
+    with open(path, encoding="utf-8") as f:
+        raw = json.load(f)
+    raw_placeholder_count = sum(1 for e in raw if not e.get("url"))
+    assert raw_placeholder_count > 0, "expected companies.json to contain placeholder entries for this test to be meaningful"
+
+    companies = load_companies(path)
+
+    # every returned company has a real, non-empty url
+    assert all(c["url"] for c in companies)
+    assert len(companies) == len(raw) - raw_placeholder_count
+
 
 @pytest.mark.parametrize("url,expected", [
     ("https://job-boards.greenhouse.io/postman/", "greenhouse"),
@@ -142,7 +191,11 @@ def test_build_source_lists_against_the_real_companies_json():
     companies = load_companies(os.path.join(repo_root, "companies.json"))
     result = build_source_lists(companies)
 
-    assert len(companies) == 26
+    # companies.json now holds many placeholder entries (name known, url not
+    # yet researched) alongside verified ones — load_companies excludes the
+    # placeholders, so this should be comfortably smaller than the raw file's
+    # total entry count, but still cover the companies we know have real URLs.
+    assert len(companies) >= 40
     # Postman and Baton use Greenhouse in the sample data
     assert "postman" in result["greenhouse_slugs"]
     assert "baton" in result["greenhouse_slugs"]

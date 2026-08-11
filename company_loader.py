@@ -43,9 +43,15 @@ def load_companies(path="companies.json"):
     Args:
         path: path to a JSON file containing a list of {"name", "url"} objects.
     Returns:
-        list of dicts: [{"name": str, "url": str}, ...] — entries missing a
-        required key or with a blank value are skipped (with a printed
-        warning) rather than crashing the whole pipeline.
+        list of dicts: [{"name": str, "url": str}, ...] — only entries with
+        both a name and a url. Entries with a name but no url (or a blank
+        url) are treated as placeholders — companies you've listed but
+        haven't found/verified a careers URL for yet — and are silently
+        excluded with a single summary count, not a per-entry warning,
+        since companies.json may legitimately hold hundreds of these while
+        they're being researched. Entries missing a name, or that aren't
+        objects at all, are structural problems and still get an individual
+        warning.
     Raises:
         CompanyListError: if the file is missing, isn't valid JSON, or the
         top-level JSON value isn't a list.
@@ -64,17 +70,31 @@ def load_companies(path="companies.json"):
         )
 
     companies = []
+    placeholder_count = 0
     for i, entry in enumerate(raw):
         if not isinstance(entry, dict):
             print(f"[company_loader] Skipping entry {i}: not an object.")
             continue
 
-        missing = [k for k in REQUIRED_KEYS if not entry.get(k)]
-        if missing:
-            print(f"[company_loader] Skipping entry {i}: missing {missing}.")
+        name = entry.get("name")
+        if not name or not str(name).strip():
+            print(f"[company_loader] Skipping entry {i}: missing 'name'.")
             continue
 
-        companies.append({"name": entry["name"].strip(), "url": entry["url"].strip()})
+        url = entry.get("url")
+        if not url or not str(url).strip():
+            # Intentional placeholder — name known, URL not yet researched.
+            # Don't spam one warning per entry; just tally and summarize.
+            placeholder_count += 1
+            continue
+
+        companies.append({"name": str(name).strip(), "url": str(url).strip()})
+
+    if placeholder_count:
+        print(
+            f"[company_loader] Skipped {placeholder_count} companies with no "
+            f"url yet (placeholders) — add a url in companies.json to enable them."
+        )
 
     return companies
 

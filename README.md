@@ -67,6 +67,16 @@ non-object entries) are skipped individually with a warning instead of
 crashing the run. If the file itself is missing or not valid JSON, the
 pipeline logs that and falls back to the env-var lists only.
 
+**Placeholder entries (`"url": null`):** `companies.json` can contain
+entries with a known company name but no URL yet — `{ "name": "Boeing",
+"url": null }`. These are companies worth tracking once a real careers URL
+is found and verified, but not yet researched. The loader excludes them
+from scraping entirely (they never reach any scraper, so they can never
+produce a 404) and prints a single summary line — `Skipped N companies
+with no url yet` — rather than one warning per entry, since there can
+legitimately be hundreds of these while the list is being filled in.
+To activate a placeholder, just fill in its `"url"`.
+
 ## Adding Playwright (JS-rendered boards)
 
 `scrape_js.py` and the `js_rendered` routing already ship in this repo — this
